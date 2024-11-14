@@ -1,0 +1,56 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Medical Imaging Analysis</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <h1>Medical Scan Analyzer</h1>
+                <p class="subtitle">Upload medical scans for AI-powered analysis using state-of-the-art models</p>
+            </div>
+
+            <div class="card-content">
+                <div class="upload-section" id="upload-area">
+                    <div class="upload-icon">
+                        <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </div>
+                    <p>Drag and drop your scan here or click to browse</p>
+                    <input type="file" id="file-input" accept=".jpg,.jpeg,.png,.dcm" hidden>
+                </div>
+
+                <div id="preview-section" class="preview-section hidden">
+                    <div class="preview-container">
+                        <img id="preview-image" src="" alt="Scan preview">
+                    </div>
+                    <div id="analyzing" class="analyzing hidden">
+                        <div class="loader"></div>
+                        <p>Analyzing scan...</p>
+                    </div>
+                </div>
+
+                <div id="results" class="results-section hidden">
+                    <div class="model-info">
+                        <h3>Analysis Results</h3>
+                        <p id="scan-type"></p>
+                    </div>
+                    <div id="findings-list" class="findings-list"></div>
+                </div>
+            </div>
+
+            <div class="card-footer">
+                <p class="note">Note: For accurate results, please ensure you upload clear medical scan images.</p>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
