@@ -6,7 +6,7 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Disable oneDNN
 
 from flask import Flask, request, render_template, jsonify
 from werkzeug.utils import secure_filename
-from utils import XRayModel, MRIModel
+from utils import XRayModel, MRIModel, detect_scan_type
 from PIL import Image
 
 app = Flask(__name__)
@@ -40,9 +40,16 @@ def predict_xray():
         return jsonify({'error': 'No file uploaded'}), 400
     
     file = request.files['file']
-    if file and allowed_file(file.filename):
-        try:
-            image = Image.open(file.stream).convert('RGB')
+    if not file or not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type'}), 400
+    
+    try:
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        
+        with Image.open(filepath) as image:
+            image = image.convert('RGB')
             predictions = xray_model.predict(image)
             
             # Filter significant findings
@@ -57,12 +64,12 @@ def predict_xray():
                     'primary_concern': significant_findings[0] if significant_findings else None
                 }
             }
-            print("XRay response:", response)  # Debug print
-            return jsonify(response)
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-    
-    return jsonify({'error': 'Invalid file type'}), 400
+            
+        os.remove(filepath)
+        return jsonify(response)
+    except Exception as e:
+        logging.error(f"Error in predict_xray: {str(e)}")
+        return jsonify({'error': 'Error analyzing image'}), 500
 
 @app.route('/predict/mri', methods=['POST'])
 def predict_mri():
@@ -70,9 +77,16 @@ def predict_mri():
         return jsonify({'error': 'No file uploaded'}), 400
     
     file = request.files['file']
-    if file and allowed_file(file.filename):
-        try:
-            image = Image.open(file.stream).convert('RGB')
+    if not file or not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type'}), 400
+    
+    try:
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        
+        with Image.open(filepath) as image:
+            image = image.convert('RGB')
             predictions = mri_model.predict(image)
             
             primary_condition = max(predictions, key=lambda x: x['probability'])
@@ -86,12 +100,39 @@ def predict_mri():
                     'probability': primary_condition['probability']
                 }
             }
-            print("MRI response:", response)  # Debug print
-            return jsonify(response)
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
+            
+        os.remove(filepath)
+        return jsonify(response)
+    except Exception as e:
+        logging.error(f"Error in predict_mri: {str(e)}")
+        return jsonify({'error': 'Error analyzing image'}), 500
+
+@app.route('/detect-scan-type', methods=['POST'])
+def detect_scan_type_route():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
     
-    return jsonify({'error': 'Invalid file type'}), 400
+    file = request.files['file']
+    if not file or not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type'}), 400
+    
+    try:
+        # Save file temporarily for debugging
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        
+        # Process image
+        with Image.open(filepath) as image:
+            image = image.convert('RGB')
+            result = detect_scan_type(image)
+            
+        # Cleanup
+        os.remove(filepath)
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"Error processing file {file.filename}: {str(e)}")
+        return jsonify({'error': 'Error analyzing image'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000, host='0.0.0.0')
