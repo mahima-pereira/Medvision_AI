@@ -6,13 +6,17 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Disable oneDNN
 
 from flask import Flask, request, render_template, jsonify
 from werkzeug.utils import secure_filename
-from utils import XRayModel, MRIModel, detect_scan_type
+from utils import AdvancedXRayModel, XRayModel, MRIModel, detect_scan_type
 from PIL import Image
+from flask_socketio import SocketIO, emit
+from flask_swagger_ui import get_swaggerui_blueprint
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
+socketio = SocketIO(app)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'dcm'}
 
@@ -29,6 +33,16 @@ try:
 except Exception as e:
     print(f"Error initializing models: {str(e)}")
     raise
+
+SWAGGER_URL = '/api/docs'
+API_URL = '/static/swagger.json'
+
+swaggerui_blueprint = get_swaggerui_blueprint(
+    SWAGGER_URL,
+    API_URL,
+    config={'app_name': "Medical Imaging API"}
+)
+app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 
 @app.route('/')
 def index():
@@ -55,6 +69,10 @@ def predict_xray():
             # Filter significant findings
             significant_findings = [p for p in predictions if p['probability'] > 10]
             
+            # Get region analysis
+            advanced_model = AdvancedXRayModel()
+            regions = advanced_model.get_region_analysis(image)
+            
             response = {
                 'success': True,
                 'findings': significant_findings,
@@ -62,7 +80,8 @@ def predict_xray():
                     'normal': len(significant_findings) == 0,
                     'conditions_detected': len(significant_findings),
                     'primary_concern': significant_findings[0] if significant_findings else None
-                }
+                },
+                'regions': regions
             }
             
         os.remove(filepath)
@@ -134,5 +153,13 @@ def detect_scan_type_route():
         logging.error(f"Error processing file {file.filename}: {str(e)}")
         return jsonify({'error': 'Error analyzing image'}), 500
 
+@socketio.on('analysis_progress')
+def handle_progress(data):
+    """Emit analysis progress updates"""
+    emit('progress_update', {
+        'stage': data['stage'],
+        'percentage': data['percentage']
+    })
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5000, host='0.0.0.0')
+    socketio.run(app, debug=True, port=5000, host='0.0.0.0')
